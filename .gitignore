@@ -1,2 +1,20 @@
-spike/capture-audio
+# Compiled binaries
 src/capture-system-audio
+src/capture-mic-audio
+spike/capture-audio
+
+# Fractal tree (internal development tracking)
+.fractal/
+
+# Claude Code internals
+CLAUDE.md
+HANDOVER.md
+LEARNINGS.md
+CHANGELOG.md
+
+# macOS
+.DS_Store
+
+# Temporary files
+*.tmp
+*.lock
