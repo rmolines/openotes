@@ -94,6 +94,41 @@ Chunks are written atomically (write to `.tmp`, rename on complete) to prevent p
 - Screen Recording permission (system audio)
 - Microphone permission (mic capture)
 
+## MCP Server
+
+Exposes meeting transcriptions as MCP tools for AI agents (Claude Code, Cursor, etc).
+
+### Setup
+
+```bash
+bun run mcp
+# or directly:
+bun run src/mcp-server.ts
+```
+
+### Claude Code configuration
+
+Add to your Claude Code MCP settings (`~/.claude.json` or project `.claude/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "openotes": {
+      "command": "bun",
+      "args": ["run", "/ABSOLUTE/PATH/TO/openotes/src/mcp-server.ts"]
+    }
+  }
+}
+```
+
+Replace `/ABSOLUTE/PATH/TO/openotes` with the actual path to this repo.
+
+### Available tools
+
+- **list_sessions** — list all transcription sessions with id, date, and segment count
+- **get_session** — retrieve the full transcription for a session by id
+- **search_transcriptions** — search across all sessions for a query string (case-insensitive)
+
 ## License
 
 MIT
