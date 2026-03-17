@@ -16,3 +16,17 @@ swiftc \
   -o "$OUT"
 chmod +x "$OUT"
 echo "Build succeeded: $OUT"
+
+SRC2="$SCRIPT_DIR/capture-mic-audio.swift"
+OUT2="$SCRIPT_DIR/capture-mic-audio"
+echo "Building $SRC2 -> $OUT2"
+swiftc \
+  -sdk "$(xcrun --show-sdk-path)" \
+  -target arm64-apple-macos13.0 \
+  -framework AVFoundation \
+  -framework Foundation \
+  -O \
+  "$SRC2" \
+  -o "$OUT2"
+chmod +x "$OUT2"
+echo "Build succeeded: $OUT2"
