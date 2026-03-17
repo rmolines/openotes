@@ -9,8 +9,9 @@
  *   OPENAI_API_KEY — required
  */
 
-import { mkdirSync, existsSync } from "fs";
+import { mkdirSync } from "fs";
 import { join } from "path";
+import { withRetry } from "./retry";
 
 const WHISPER_API = "https://api.openai.com/v1/audio/transcriptions";
 const DEFAULT_DURATION_MS = 30000;
@@ -66,14 +67,19 @@ export async function transcribeChunk(wavPath: string, sessionId?: string): Prom
   form.append("model", "whisper-1");
   form.append("language", "pt");
 
-  // Call Whisper API (retry logic added by D3 — for now throws on error)
-  const response = await fetch(WHISPER_API, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: form,
-  });
+  // Call Whisper API with exponential backoff retry (3 attempts, 1s/2s/4s)
+  const response = await withRetry(
+    () =>
+      fetch(WHISPER_API, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: form,
+      }),
+    3,
+    1000
+  );
 
   if (!response.ok) {
     const body = await response.text();
