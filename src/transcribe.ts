@@ -60,23 +60,25 @@ export async function transcribeChunk(wavPath: string, sessionId?: string): Prom
   }
 
   const blob = await file.blob();
-
-  // Build multipart form
-  const form = new FormData();
-  form.append("file", blob, wavPath.split("/").pop() ?? "audio.wav");
-  form.append("model", "whisper-1");
-  form.append("language", "pt");
+  const filename = wavPath.split("/").pop() ?? "audio.wav";
 
   // Call Whisper API with exponential backoff retry (3 attempts, 1s/2s/4s)
+  // FormData is rebuilt inside the lambda so each retry gets a fresh form
+  // (Blob stream may be consumed after the first attempt)
   const response = await withRetry(
-    () =>
-      fetch(WHISPER_API, {
+    () => {
+      const form = new FormData();
+      form.append("file", blob, filename);
+      form.append("model", "whisper-1");
+      form.append("language", "pt");
+      return fetch(WHISPER_API, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
         },
         body: form,
-      }),
+      });
+    },
     3,
     1000
   );
@@ -136,4 +138,7 @@ async function main() {
   }
 }
 
-main();
+// Guard entrypoint — only run when executed directly, not when imported as a module
+if (import.meta.main) {
+  main();
+}
