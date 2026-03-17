@@ -12,14 +12,22 @@ Microphone (AVAudioEngine)       ──┘
 
 Two native Swift CLIs capture audio from different sources, convert from hardware format (Float32 48kHz stereo) to Whisper's preferred format (Int16 16kHz mono), and write 30-second WAV chunks to disk. An IPC protocol over stdout coordinates with the orchestrator.
 
-## Architecture
+## Project structure
 
-| Component | Path | Description |
-|-----------|------|-------------|
-| System audio capture | `src/capture-system-audio.swift` | ScreenCaptureKit-based CLI |
-| Microphone capture | `src/capture-mic-audio.swift` | AVAudioEngine-based CLI |
-| Audio contract | `docs/audio-contract.md` | Chunk format & IPC protocol spec |
-| Build script | `src/build.sh` | Compiles both targets |
+```
+openotes/
+├── docs/
+│   └── audio-contract.md      # Chunk format & IPC protocol spec
+├── spike/
+│   ├── build.sh               # Spike build script
+│   └── capture-audio.swift    # Initial ScreenCaptureKit proof-of-concept
+├── src/
+│   ├── build.sh               # Compiles both capture targets
+│   ├── capture-mic-audio.swift       # Microphone capture (AVAudioEngine)
+│   ├── capture-system-audio.swift    # System audio capture (ScreenCaptureKit)
+│   └── validate.sh            # Output validation script
+└── README.md
+```
 
 ## Build
 
