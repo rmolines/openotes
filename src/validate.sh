@@ -90,7 +90,7 @@ if [ -n "$CHUNK_LINES" ]; then
     if [ -f "$WAV_PATH" ]; then
       FILE_OUTPUT="$(file "$WAV_PATH")"
       if echo "$FILE_OUTPUT" | grep -qi "RIFF\|WAV\|Audio"; then
-        echo "  [OK] $WAV_PATH — $(file "$WAV_PATH" | cut -d: -f2- | xargs)"
+        echo "  [OK] $WAV_PATH — $(echo "$FILE_OUTPUT" | cut -d: -f2- | xargs)"
       else
         echo "  [FAIL] $WAV_PATH exists but file command does not identify it as WAV: $FILE_OUTPUT"
         ERRORS+=("WAV file invalid: $WAV_PATH")

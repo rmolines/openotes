@@ -1,7 +1,7 @@
 ---
 predicate: "Existe um sistema open source que captura áudio de reuniões ao vivo, transcreve com IA de qualidade, e expõe as transcrições via MCP server para agentes terem contexto"
 status: pending
-active_node: captura-audio/captura-sistema-audio/spike-viabilidade-screencapturekit
+active_node: captura-audio/captura-sistema-audio/impl-captura-sistema
 created: 2026-03-16
 ---
 
