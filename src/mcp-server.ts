@@ -1,5 +1,4 @@
-import { createServer } from "openserver";
-import type { CustomToolDef } from "openserver";
+import { createServer, type CustomToolDef } from "openserver";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
@@ -52,21 +51,17 @@ const listSessions: CustomToolDef = {
   description:
     "List all transcription sessions. Returns an array of { session_id, created_at, segment_count }.",
   inputSchema: {},
-  handler: async (_args: unknown) => {
-    const sessionIds = listSessionIds();
-    const result = sessionIds.map((sessionId) => {
+  handler: async () => {
+    return listSessionIds().map((sessionId) => {
       const sessionDir = path.join(TRANSCRIPTIONS_DIR, sessionId);
       const stat = fs.statSync(sessionDir);
-      const jsonFiles = fs
-        .readdirSync(sessionDir)
-        .filter((f) => f.endsWith(".json"));
+      const jsonFiles = fs.readdirSync(sessionDir).filter((f) => f.endsWith(".json"));
       return {
         session_id: sessionId,
         created_at: stat.mtime.toISOString(),
         segment_count: jsonFiles.length,
       };
     });
-    return result;
   },
 };
 
