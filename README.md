@@ -12,6 +12,28 @@ Microphone (AVAudioEngine)       ──┘
 
 Two native Swift CLIs capture audio from different sources, convert from hardware format (Float32 48kHz stereo) to Whisper's preferred format (Int16 16kHz mono), and write 30-second WAV chunks to disk. An IPC protocol over stdout coordinates with the orchestrator.
 
+## Predicate tree
+
+The project is decomposed as a fractal predicate tree — each node is a falsifiable statement that must be satisfied before its parent can be true.
+
+```
+◉ Sistema open source que captura áudio de reuniões, transcreve com IA,
+│ e expõe via MCP server para agentes terem contexto
+│
+├── ✅ Captura de áudio em tempo real (mic + sistema)
+│   ├── ✅ Contrato de chunks definido (codec, sample rate, duração)
+│   ├── ✅ Captura de áudio do sistema (ScreenCaptureKit)
+│   │   ├── ✅ Spike: viabilidade sem virtual audio driver
+│   │   └── ✅ Implementação produção
+│   └── ✅ Captura de microfone (AVAudioEngine)
+│
+├── ✅ Transcrição com qualidade suficiente para contexto de reunião
+│
+└── ○ MCP server expondo transcrições para agentes
+```
+
+`✅ satisfied` · `◉ in progress` · `○ pending`
+
 ## Project structure
 
 ```
