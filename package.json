@@ -1,0 +1,8 @@
+{
+  "name": "openotes",
+  "version": "0.1.0",
+  "scripts": {
+    "transcribe": "bun run src/transcribe.ts",
+    "session": "bun run src/transcribe-session.ts"
+  }
+}
