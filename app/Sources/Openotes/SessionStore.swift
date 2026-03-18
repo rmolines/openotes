@@ -13,7 +13,44 @@ class SessionStore: ObservableObject {
         return cwd.deletingLastPathComponent().appendingPathComponent("data")
     }
 
-    init() { load() }
+    private var transcriptionsDirSource: DispatchSourceFileSystemObject?
+    private var transcriptionsDirFd: Int32 = -1
+
+    init() {
+        load()
+        startWatching()
+    }
+
+    private func startWatching() {
+        let transcriptionsURL = dataDir.appendingPathComponent("transcriptions")
+        // Ensure the directory exists before opening
+        try? FileManager.default.createDirectory(
+            at: transcriptionsURL,
+            withIntermediateDirectories: true
+        )
+        let path = transcriptionsURL.path
+        let fd = open(path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        transcriptionsDirFd = fd
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: .write,
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            self?.load()
+        }
+        source.resume()
+        transcriptionsDirSource = source
+    }
+
+    deinit {
+        transcriptionsDirSource?.cancel()
+        if transcriptionsDirFd >= 0 {
+            close(transcriptionsDirFd)
+        }
+    }
 
     func load() {
         let transcriptionsDir = dataDir.appendingPathComponent("transcriptions")
