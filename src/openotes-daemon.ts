@@ -17,7 +17,7 @@
  *   All logs via process.stderr.write — stdout is reserved for MCP protocol
  */
 
-import { renameSync } from "fs";
+import { renameSync, writeFileSync } from "fs";
 
 type SubProcess = ReturnType<typeof Bun.spawn>;
 
@@ -36,15 +36,8 @@ function writeStatusFile(
     .pathname;
   try {
     const json = JSON.stringify({ recording, session, started });
-    Bun.write(tmpPath, json).then(() => {
-      try {
-        renameSync(tmpPath, statusPath);
-      } catch (err) {
-        process.stderr.write(
-          `[daemon] writeStatusFile rename failed: ${err}\n`
-        );
-      }
-    });
+    writeFileSync(tmpPath, json);
+    renameSync(tmpPath, statusPath);
   } catch (err) {
     process.stderr.write(`[daemon] writeStatusFile failed: ${err}\n`);
   }
