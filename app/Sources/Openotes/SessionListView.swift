@@ -22,33 +22,26 @@ struct SessionListView: View {
     var body: some View {
         if store.sessions.isEmpty {
             VStack(spacing: 8) {
-                Text("Openotes")
-                    .font(.headline)
                 Spacer()
                 Text("No sessions yet.")
                     .foregroundColor(.secondary)
                 Spacer()
             }
-            .padding()
+            .navigationTitle("Openotes")
         } else {
-            VStack(spacing: 0) {
-                Text("Openotes")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                Divider()
-                List {
-                    ForEach(groupedSessions, id: \.0) { (dayLabel, sessions) in
-                        Section(header: Text(dayLabel).font(.subheadline).fontWeight(.semibold)) {
-                            ForEach(sessions) { session in
+            List {
+                ForEach(groupedSessions, id: \.0) { (dayLabel, sessions) in
+                    Section(header: Text(dayLabel).font(.subheadline).fontWeight(.semibold)) {
+                        ForEach(sessions) { session in
+                            NavigationLink(destination: TranscriptionDetailView(session: session)) {
                                 SessionRowView(session: session)
                             }
                         }
                     }
                 }
-                .listStyle(.sidebar)
             }
+            .listStyle(.sidebar)
+            .navigationTitle("Openotes")
         }
     }
 
