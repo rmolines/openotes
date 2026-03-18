@@ -30,3 +30,17 @@ swiftc \
   -o "$OUT2"
 chmod +x "$OUT2"
 echo "Build succeeded: $OUT2"
+
+SRC3="$SCRIPT_DIR/detect-meeting.swift"
+OUT3="$SCRIPT_DIR/detect-meeting"
+echo "Building $SRC3 -> $OUT3"
+swiftc \
+  -sdk "$(xcrun --show-sdk-path)" \
+  -target arm64-apple-macos13.0 \
+  -framework Foundation \
+  -framework AppKit \
+  -O \
+  "$SRC3" \
+  -o "$OUT3"
+chmod +x "$OUT3"
+echo "Build succeeded: $OUT3"
