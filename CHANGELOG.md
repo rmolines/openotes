@@ -1,5 +1,12 @@
 # Changelog
 
+## data-layer-swift — PR #6 — 2026-03-18
+**Type:** feat
+**Node:** data-layer-swift
+**Commit:** `e6f68d3`
+**What:** Swift data layer for the openotes macOS app. `Models.swift` defines `TranscriptionSegment` (Codable, fields: text/timestamp/seq/duration_ms) and `Session` (id, date, segments, sourceAppName). `SessionStore: ObservableObject` scans `data/transcriptions/session-*/`, decodes segment JSON, sorts sessions newest-first. Path resolution via `OPENOTES_DATA_DIR` env var with fallback to `../data` relative to CWD (works with `swift run` from `app/`). `ContentView` wired with `@StateObject SessionStore` — shows session count when data is present. `swift build` exits 0.
+**Decisions:** see LEARNINGS.md#data-layer-swift
+
 ## scaffold-menubar-app — PR #5 — 2026-03-18
 **Type:** feat
 **Node:** scaffold-menubar-app

@@ -1,5 +1,22 @@
 # Handover
 
+## data-layer-swift — 2026-03-18
+
+**What was done:** The macOS app now has a working data layer. `SessionStore` discovers and loads real transcription sessions from disk at launch — scanning `data/transcriptions/session-*/`, decoding each segment JSON, and publishing them as `@Published var sessions: [Session]`. `ContentView` is wired with `@StateObject SessionStore` and shows session count. Path resolution works with `OPENOTES_DATA_DIR` env var or `../data` relative to CWD, so `swift run` from `app/` finds data without any extra configuration.
+
+**Key decisions:**
+- `FileManager.default.currentDirectoryPath` (CWD) used as path resolution base — not `Bundle.main.bundleURL`, which resolves to the `.build/` directory inside the SPM package. When running `swift run` from `app/`, CWD is the `app/` directory, so `../data` correctly resolves to the repo's `data/` directory.
+- `Combine` imported in `SessionStore` for `ObservableObject` — this is the correct import even though the macro-like conformance looks like it could come from Foundation alone.
+- `sourceAppName` left as `nil` — field is present in the model for future use (capture binary attribution) but no data source exists yet.
+
+**Next steps:**
+- Views layer (sibling node): sessions list grouped by day, transcription reader view, search — the data layer is now the foundation for the UI.
+
+**Key files:**
+- `app/Sources/Openotes/Models.swift` — TranscriptionSegment + Session structs
+- `app/Sources/Openotes/SessionStore.swift` — ObservableObject with disk scanning and path resolution
+- `app/Sources/Openotes/ContentView.swift` — wired with @StateObject
+
 ## scaffold-menubar-app — 2026-03-18
 
 **What was done:** A macOS Menu Bar Popover app scaffold now exists at `app/`. Running `swift run` from that directory places a waveform icon in the system status bar; clicking the icon opens an NSPopover hosting a placeholder SwiftUI ContentView. The app has no Dock icon (activation policy set to `.accessory`). `swift build` exits 0. The existing CLI binaries in `src/` are untouched. This scaffold is the foundation for the real openotes UI (sessions list, search, live recording status).

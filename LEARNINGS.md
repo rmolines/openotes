@@ -1,5 +1,9 @@
 # Learnings
 
+## data-layer-swift
+
+**SPM `swift run` CWD vs `Bundle.main.bundleURL` for data path resolution:** In an SPM executable, `Bundle.main.bundleURL` resolves to `.build/arm64-apple-macosx/debug/BinaryName` — deep inside the package's build directory. It is NOT the repo root or the `app/` directory. For resolving data paths at runtime, use `FileManager.default.currentDirectoryPath` instead, which gives the working directory at launch time. When running `swift run` from `app/`, CWD is `app/` — so `../data` correctly finds the repo's `data/` directory. This is the right pattern for SPM-managed macOS utilities that reference files relative to the repo root.
+
 ## scaffold-menubar-app
 
 **SPM executables cannot embed Info.plist as a resource:** Adding `Info.plist` to an SPM `.executableTarget`'s `resources` array (via `.copy()` or `.process()`) causes a build error: "resource 'Info.plist' in target is forbidden; Info.plist is not supported as a top-level resource file in the resources bundle." The workaround for LSUIElement (no Dock icon) is to call `NSApplication.shared.setActivationPolicy(.accessory)` in `main.swift` — this is equivalent at runtime. Keep the `Info.plist` in the source tree (excluded via `exclude: ["Info.plist"]` in Package.swift) for future Xcode project integration.
