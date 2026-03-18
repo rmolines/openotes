@@ -2,27 +2,57 @@ import SwiftUI
 
 struct TranscriptionDetailView: View {
     let session: Session
+    var onBack: () -> Void
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                ForEach(session.segments) { segment in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(timestampLabel(ms: segment.timestamp))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(segment.text)
-                            .font(.body)
-                            .fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 0) {
+            // Header with back button
+            HStack {
+                Button(action: onBack) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        Text("Back")
                     }
-                    if segment.seq != session.segments.last?.seq {
-                        Divider()
+                    .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+
+            // Title
+            HStack {
+                Text(sessionTitle)
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+
+            Divider()
+
+            // Transcription
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(session.segments) { segment in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(timestampLabel(epochMs: segment.timestamp))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(segment.text)
+                                .font(.body)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if segment.seq != session.segments.last?.seq {
+                            Divider()
+                        }
                     }
                 }
+                .padding(16)
             }
-            .padding()
         }
-        .navigationTitle(sessionTitle)
     }
 
     private var sessionTitle: String {
@@ -31,15 +61,10 @@ struct TranscriptionDetailView: View {
         return formatter.string(from: session.date)
     }
 
-    private func timestampLabel(ms: Int) -> String {
-        let totalSeconds = ms / 1000
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        if hours > 0 {
-            return String(format: "[%d:%02d:%02d]", hours, minutes, seconds)
-        } else {
-            return String(format: "[%02d:%02d]", minutes, seconds)
-        }
+    private func timestampLabel(epochMs: Int) -> String {
+        let date = Date(timeIntervalSince1970: Double(epochMs) / 1000.0)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: date)
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SessionListView: View {
     @ObservedObject var store: SessionStore
+    var onSelect: (Session) -> Void
     @State private var searchText: String = ""
 
     private var filteredSessions: [Session] {
@@ -28,29 +29,57 @@ struct SessionListView: View {
     }
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Openotes")
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            // Search field
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Search transcriptions...", text: $searchText)
+                    .textFieldStyle(.plain)
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(8)
+            .background(Color.primary.opacity(0.06))
+            .cornerRadius(8)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+
+            // Content
             if store.sessions.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Text("No sessions yet.")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
+                Spacer()
+                Text("No sessions yet.")
+                    .foregroundColor(.secondary)
+                Spacer()
             } else if !searchText.isEmpty && filteredSessions.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Text("No results for \"\(searchText)\"")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
+                Spacer()
+                Text("No results for \"\(searchText)\"")
+                    .foregroundColor(.secondary)
+                Spacer()
             } else {
                 List {
                     ForEach(groupedSessions, id: \.0) { (dayLabel, sessions) in
                         Section(header: Text(dayLabel).font(.subheadline).fontWeight(.semibold)) {
                             ForEach(sessions) { session in
-                                NavigationLink(destination: TranscriptionDetailView(session: session)) {
+                                Button(action: { onSelect(session) }) {
                                     SessionRowView(session: session)
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -58,8 +87,6 @@ struct SessionListView: View {
                 .listStyle(.sidebar)
             }
         }
-        .navigationTitle("Openotes")
-        .searchable(text: $searchText, prompt: "Search transcriptions")
     }
 
     private func dayLabel(for date: Date, calendar: Calendar) -> String {
