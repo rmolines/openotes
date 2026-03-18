@@ -96,7 +96,7 @@ class MeetingDetector {
 
 enum MeetingState {
     case idle
-    case active(source: String)
+    case active
 }
 
 // MARK: - Main
@@ -111,7 +111,7 @@ let timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
     switch state {
     case .idle:
         if result.detected {
-            state = .active(source: result.source)
+            state = .active
             print("MEETING_DETECTED:\(result.source)")
             fflush(stdout)
         }
