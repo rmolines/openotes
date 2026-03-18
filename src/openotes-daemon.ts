@@ -17,9 +17,38 @@
  *   All logs via process.stderr.write — stdout is reserved for MCP protocol
  */
 
+import { renameSync } from "fs";
+
 type SubProcess = ReturnType<typeof Bun.spawn>;
 
 let transcribeProc: SubProcess | null = null;
+
+// ── status file ───────────────────────────────────────────────────────────────
+
+function writeStatusFile(
+  recording: boolean,
+  session: string | null,
+  started: string | null
+): void {
+  const statusPath = new URL("../data/.daemon-status.json", import.meta.url)
+    .pathname;
+  const tmpPath = new URL("../data/.daemon-status.json.tmp", import.meta.url)
+    .pathname;
+  try {
+    const json = JSON.stringify({ recording, session, started });
+    Bun.write(tmpPath, json).then(() => {
+      try {
+        renameSync(tmpPath, statusPath);
+      } catch (err) {
+        process.stderr.write(
+          `[daemon] writeStatusFile rename failed: ${err}\n`
+        );
+      }
+    });
+  } catch (err) {
+    process.stderr.write(`[daemon] writeStatusFile failed: ${err}\n`);
+  }
+}
 
 // ── readline helper (copied from transcribe-session.ts pattern) ──────────────
 
@@ -67,6 +96,9 @@ function spawnTranscribeSession(): void {
     }
   );
 
+  const sessionId = "session-" + Date.now();
+  writeStatusFile(true, sessionId, new Date().toISOString());
+
   transcribeProc.exited.then((code) => {
     process.stderr.write(`[daemon] transcribe-session exited (code=${code})\n`);
     transcribeProc = null;
@@ -78,6 +110,7 @@ function stopTranscribeSession(): void {
     process.stderr.write("[daemon] sending SIGTERM to transcribe-session\n");
     transcribeProc.kill("SIGTERM");
     transcribeProc = null;
+    writeStatusFile(false, null, null);
   }
 }
 
@@ -158,6 +191,7 @@ process.on("SIGTERM", () => {
 // ── main ──────────────────────────────────────────────────────────────────────
 
 process.stderr.write("[daemon] openotes daemon starting\n");
+writeStatusFile(false, null, null);
 runDetectMeeting().catch((err) => {
   process.stderr.write(`[daemon] fatal: ${err}\n`);
   process.exit(1);
