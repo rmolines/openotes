@@ -1,0 +1,113 @@
+# Handover
+
+## impl-daemon — 2026-03-17
+
+**What was done:** The system now has a background daemon that closes the loop between meeting detection and recording. `bun run daemon` starts `src/openotes-daemon.ts`, which continuously runs `detect-meeting` (with auto-respawn on crash), sends a macOS notification when a meeting is detected, prompts the user in the terminal, and starts `transcribe-session` on confirmation. `MEETING_ENDED` triggers graceful SIGTERM to the recording process. A LaunchAgent plist and install script enable auto-start at login.
+
+**Key decisions:**
+- Notification via `osascript display notification` (no extra dependency). Terminal stdin prompt used for user confirmation since the daemon runs in a terminal and a full dialog/menubar app is out of scope.
+- `import.meta.url` used for `cwd` in `spawnTranscribeSession` — avoids hardcoding the repo path and works from any install location.
+- `detect-meeting` respawn loop: on unexpected exit, the daemon waits 2s and restarts. This handles binary crashes without bringing down the whole daemon.
+- `transcribeProc` null-check before spawning: if a new MEETING_DETECTED fires while already recording, it is silently skipped (one active recording at a time).
+
+**Pitfalls:**
+- None new. See LEARNINGS.md for import.meta.url portable path pattern.
+
+**Next steps:**
+- parent predicate (daemon-background) will be re-evaluated by the fractal tree.
+- Possible future: menubar app wrapping the daemon for richer UI (explicitly deferred in PRD).
+
+**Key files:**
+- `src/openotes-daemon.ts` — main daemon
+- `com.openotes.daemon.plist` — LaunchAgent plist
+- `scripts/install-daemon.sh` — install helper
+
+## impl-deteccao — 2026-03-17
+
+**What was done:** The system can now detect that a meeting is in progress. `src/detect-meeting` is a compiled Swift binary that polls every 3 seconds for active video-conference apps (Zoom, Teams, FaceTime, Webex via NSWorkspace) and Google Meet in any running browser (Chrome, Safari, Arc, Edge via osascript). It emits `MEETING_DETECTED:<source>` and `MEETING_ENDED` on stdout using the same protocol as the capture binaries. This unblocks the next node: integrating detection with recording orchestration.
+
+**Key decisions:**
+- NSWorkspace approach (zero new permissions) confirmed as primary detection method over Calendar/EventKit (requires permission) and audio detection (high false-positive risk without process filtering).
+- osascript runs only when the target browser is already running (checked via NSWorkspace first) — avoids spurious Accessibility permission prompts on browsers not in use.
+- State machine uses two simple states (idle/active) — no source tracking in the active state since the source is already emitted at transition time and the PRD's "simple state machine" constraint was respected.
+
+**Pitfalls:**
+- NSWorkspace requires AppKit, not just Foundation — without `-framework AppKit` in the swiftc invocation, NSWorkspace symbols are undefined even though the header is in the AppKit umbrella. The build fails with a linker error.
+
+**Next steps:**
+- Integrate `detect-meeting` with recording orchestration (next predicate: auto-start/stop recording on meeting detection).
+- Calendar/EventKit integration deferred to V2 (proactive notification before meeting starts).
+
+**Key files:**
+- `src/detect-meeting.swift` — detection binary (NSWorkspace + osascript)
+- `src/build.sh` — updated with third target
+
+## mcp-server-exposicao — 2026-03-16
+
+**What was done:** Meeting transcriptions are now accessible to AI agents via a local MCP server. Any Claude Code instance configured with the mcpServers snippet can call `list_sessions`, `get_session`, or `search_transcriptions` to retrieve and search through transcribed meeting content stored in `data/transcriptions/`.
+
+**Key decisions:**
+- `openserver` installed from `github:rmolines/openserver` (not npm — the npm package is an unrelated 2016 web server). The GitHub version is the Bun MCP framework the plan specified.
+- All logging uses `process.stderr.write` exclusively — `console.log` writes to stdout and corrupts the MCP stdio framing, causing silent JSON-RPC parse failures on the client side.
+- `TRANSCRIPTIONS_DIR` resolved via `process.cwd()` at module load time — server must be started from the repo root. This is a known openserver convention documented in its CLAUDE.md.
+- `bun build --target bun` required — the default browser target fails on `process` imports inside openserver's dist bundle.
+
+**Pitfalls:**
+- `bun add openserver` installs the wrong package (v0.2.5, 2016). Use `bun add github:rmolines/openserver` to get the Bun MCP framework.
+- Starting the server from a non-root CWD silently misdirects all data I/O — no error is thrown, tools just return empty results.
+
+**Next steps:**
+- Root predicate is the next evaluation point: "Existe um sistema open source que captura áudio de reuniões ao vivo, transcreve com IA de qualidade, e expõe as transcrições via MCP server para agentes terem contexto"
+- All three sub-predicates (capture, transcription, MCP exposure) are now satisfied.
+
+**Key files:**
+- `src/mcp-server.ts` — MCP server with 3 custom tools
+- `package.json` — `mcp` script + openserver dependency
+- `README.md` — mcpServers configuration guide
+
+## transcricao-ia — 2026-03-16
+
+**What was done:** The TypeScript transcription layer is now live. Any WAV chunk produced by the capture binaries can be sent to Whisper API and its transcript persisted locally. The session orchestrator closes the loop: spawn capture → receive CHUNK signals → transcribe → log — with SIGTERM forwarding ensuring graceful shutdown without losing the in-flight chunk.
+
+**Key decisions:**
+- `import.meta.main` guard in `src/transcribe.ts` prevents the CLI entrypoint from triggering when the module is imported by the orchestrator — without this, `transcribe-session.ts` would crash on startup while trying to read stdin for a WAV path.
+- FormData is rebuilt inside the `withRetry` lambda (not outside it), because Blob streams may be consumed after the first HTTP attempt. Each retry needs a fresh multipart form.
+- Session ID derived from startup timestamp (`session-${Date.now()}`), not from chunk filenames, so all chunks from one session share a directory even if the capture process was restarted mid-session.
+- `language=pt` passed to Whisper API to improve accuracy for Portuguese — Whisper can auto-detect but explicit language hints reduce misclassifications on short or noisy clips.
+
+**Pitfalls:**
+- `bun --check` does not exist in Bun 1.3. Use `bun build <file> --outdir /tmp` as the TypeScript validity check.
+- The chunk file path passed to `transcribeChunk` must match the contract filename format (`chunk-{unix_ms}-{seq}.wav`) for session/seq parsing to work. Non-conforming paths fall back to `sessionId=Date.now(), seq=0`.
+
+**Next steps:**
+- MCP server node: expose `list_sessions`, `get_transcription`, `search_transcriptions` as MCP tools reading from `data/transcriptions/`.
+- Both capture sources (system + mic) can be orchestrated simultaneously by running two session instances with different `--capture` flags.
+
+**Key files:**
+- `src/transcribe.ts` — Whisper API client + persistence
+- `src/retry.ts` — generic exponential backoff utility
+- `src/transcribe-session.ts` — session orchestrator
+- `package.json` — `transcribe` and `session` scripts
+
+## captura-microfone — 2026-03-16
+
+**What was done:** Created `src/capture-mic-audio.swift`, a Swift CLI that captures default microphone input via AVAudioEngine, converts audio to the contracted format (Int16 16kHz mono WAV), and emits 30s chunks via the IPC stdout protocol. Updated `src/build.sh` to compile both system audio and microphone capture targets.
+
+**Key decisions:**
+- Used `inputNode.inputFormat(forBus: 0)` (hardware's native format) for the tap to avoid AVAudioEngine format mismatch errors — do not pass a different format to `installTap`.
+- `floatChannelData` on AVAudioPCMBuffer returns non-interleaved (channel-per-pointer) buffers, not interleaved — the code manually interleaves before passing to AudioConverter.
+- Decimation ratio is computed at runtime from hardware sample rate — handles both 44.1kHz (ratio≈2) and 48kHz (ratio=3) inputs.
+- Output directory `/tmp/openotes/mic-chunks/` kept separate from system audio `/tmp/openotes/chunks/` so both capture processes can run concurrently.
+
+**Pitfalls:**
+- AVAudioEngine requires microphone TCC permission at runtime — no entitlement needed for CLI binaries, but the first run will prompt the user. Subsequent runs use the cached grant.
+- On headless/CI environments, `engine.inputNode` will throw at start because no microphone is available. Guard for this in integration contexts.
+
+**Next steps:**
+- Bun orchestrator should be able to spawn both `capture-system-audio` and `capture-mic-audio` with separate chunk directories and merge transcription results.
+- Transcription layer can now consume from two sources independently.
+
+**Key files:**
+- `src/capture-mic-audio.swift` — new CLI
+- `src/build.sh` — updated with second target
+- `docs/audio-contract.md` — chunk contract (unchanged, both CLIs comply)
