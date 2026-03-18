@@ -1,5 +1,26 @@
 # Handover
 
+## scaffold-menubar-app — 2026-03-18
+
+**What was done:** A macOS Menu Bar Popover app scaffold now exists at `app/`. Running `swift run` from that directory places a waveform icon in the system status bar; clicking the icon opens an NSPopover hosting a placeholder SwiftUI ContentView. The app has no Dock icon (activation policy set to `.accessory`). `swift build` exits 0. The existing CLI binaries in `src/` are untouched. This scaffold is the foundation for the real openotes UI (sessions list, search, live recording status).
+
+**Key decisions:**
+- SPM executable target (`Package.swift`) chosen over `.xcodeproj` — simpler, git-friendly, no Xcode required to build.
+- `Info.plist` with `LSUIElement=true` is present in `app/Sources/Openotes/Info.plist` for documentation and future Xcode integration, but excluded from the SPM build (`exclude: ["Info.plist"]`). SPM rejects top-level Info.plist as a resource in executable targets. The no-Dock behavior is achieved identically via `NSApplication.shared.setActivationPolicy(.accessory)` in `main.swift`.
+- `swiftLanguageVersions: [.v5]` set in Package.swift to avoid Swift 6 strict concurrency warnings in an AppKit/NSObject context.
+
+**Pitfalls:**
+- SPM cannot embed Info.plist into an executable via `.copy()` or `.process()` resources — it throws a build error. Use `setActivationPolicy(.accessory)` for the LSUIElement effect instead.
+
+**Next steps:**
+- Real content: sessions list (grouped by day), transcription viewer, search — parent predicate (macos-app) will be re-evaluated by the fractal tree.
+
+**Key files:**
+- `app/Package.swift` — SPM package definition
+- `app/Sources/Openotes/AppDelegate.swift` — NSStatusItem + NSPopover lifecycle
+- `app/Sources/Openotes/ContentView.swift` — placeholder SwiftUI view
+- `app/Sources/Openotes/main.swift` — NSApplication entry point
+
 ## impl-daemon — 2026-03-17
 
 **What was done:** The system now has a background daemon that closes the loop between meeting detection and recording. `bun run daemon` starts `src/openotes-daemon.ts`, which continuously runs `detect-meeting` (with auto-respawn on crash), sends a macOS notification when a meeting is detected, prompts the user in the terminal, and starts `transcribe-session` on confirmation. `MEETING_ENDED` triggers graceful SIGTERM to the recording process. A LaunchAgent plist and install script enable auto-start at login.

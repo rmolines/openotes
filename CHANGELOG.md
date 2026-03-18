@@ -1,5 +1,12 @@
 # Changelog
 
+## scaffold-menubar-app — PR #5 — 2026-03-18
+**Type:** feat
+**Node:** scaffold-menubar-app
+**Commit:** `5b17949`
+**What:** SPM-based macOS Menu Bar Popover app at `app/`. `AppDelegate` creates `NSStatusItem` (waveform icon); clicking toggles `NSPopover` hosting `SwiftUI ContentView` (placeholder). No Dock icon via `setActivationPolicy(.accessory)`. `swift build` exits 0. macOS 13+ target, Swift 5 language version. `Info.plist` with `LSUIElement=true` in source but excluded from SPM build.
+**Decisions:** see LEARNINGS.md#scaffold-menubar-app
+
 ## impl-daemon — PR #4 — 2026-03-17
 **Type:** feat
 **Node:** impl-daemon

@@ -1,5 +1,13 @@
 # Learnings
 
+## scaffold-menubar-app
+
+**SPM executables cannot embed Info.plist as a resource:** Adding `Info.plist` to an SPM `.executableTarget`'s `resources` array (via `.copy()` or `.process()`) causes a build error: "resource 'Info.plist' in target is forbidden; Info.plist is not supported as a top-level resource file in the resources bundle." The workaround for LSUIElement (no Dock icon) is to call `NSApplication.shared.setActivationPolicy(.accessory)` in `main.swift` — this is equivalent at runtime. Keep the `Info.plist` in the source tree (excluded via `exclude: ["Info.plist"]` in Package.swift) for future Xcode project integration.
+
+**`-sectcreate` linker flag does not work via SPM `unsafeFlags`:** Attempting to embed Info.plist via `linkerSettings: [.unsafeFlags(["-sectcreate", "__TEXT", "__info_plist", "path/to/Info.plist"])]` in Package.swift fails with "unknown argument: '-sectcreate'". The linker invocation via SPM does not pass flags in the correct position for `-sectcreate`. Use `setActivationPolicy` instead.
+
+**macOS Menu Bar app lifecycle without `@main`:** For NSStatusItem + NSPopover apps, avoid the `@main` / `App` protocol pattern — it creates a full application lifecycle with a Dock icon and window by default. Instead: (1) create `main.swift` as the SPM entry point, (2) instantiate `AppDelegate` manually, (3) set it as `NSApplication.shared.delegate`, (4) call `setActivationPolicy(.accessory)` before `run()`. This gives full control over the activation policy and avoids the SwiftUI App lifecycle conflicting with AppKit.
+
 ## impl-daemon
 
 **`import.meta.url` for portable cwd in Bun spawns:** When a Bun script spawns a child process that needs the repo root as its working directory, avoid hardcoding the absolute path. Use `new URL("..", import.meta.url).pathname` to compute the parent directory of the current file at runtime. This works regardless of where the repo is cloned and survives renames.
