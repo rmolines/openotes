@@ -2,11 +2,19 @@ import SwiftUI
 
 struct SessionListView: View {
     @ObservedObject var store: SessionStore
+    @State private var searchText: String = ""
+
+    private var filteredSessions: [Session] {
+        if searchText.isEmpty { return store.sessions }
+        return store.sessions.filter { session in
+            session.segments.contains { $0.text.localizedCaseInsensitiveContains(searchText) }
+        }
+    }
 
     private var groupedSessions: [(String, [Session])] {
         let calendar = Calendar.current
         var groups: [Date: [Session]] = [:]
-        for session in store.sessions {
+        for session in filteredSessions {
             let day = calendar.startOfDay(for: session.date)
             groups[day, default: []].append(session)
         }
@@ -20,29 +28,38 @@ struct SessionListView: View {
     }
 
     var body: some View {
-        if store.sessions.isEmpty {
-            VStack(spacing: 8) {
-                Spacer()
-                Text("No sessions yet.")
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .navigationTitle("Openotes")
-        } else {
-            List {
-                ForEach(groupedSessions, id: \.0) { (dayLabel, sessions) in
-                    Section(header: Text(dayLabel).font(.subheadline).fontWeight(.semibold)) {
-                        ForEach(sessions) { session in
-                            NavigationLink(destination: TranscriptionDetailView(session: session)) {
-                                SessionRowView(session: session)
+        Group {
+            if store.sessions.isEmpty {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Text("No sessions yet.")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+            } else if !searchText.isEmpty && filteredSessions.isEmpty {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Text("No results for \"\(searchText)\"")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+            } else {
+                List {
+                    ForEach(groupedSessions, id: \.0) { (dayLabel, sessions) in
+                        Section(header: Text(dayLabel).font(.subheadline).fontWeight(.semibold)) {
+                            ForEach(sessions) { session in
+                                NavigationLink(destination: TranscriptionDetailView(session: session)) {
+                                    SessionRowView(session: session)
+                                }
                             }
                         }
                     }
                 }
+                .listStyle(.sidebar)
             }
-            .listStyle(.sidebar)
-            .navigationTitle("Openotes")
         }
+        .navigationTitle("Openotes")
+        .searchable(text: $searchText, prompt: "Search transcriptions")
     }
 
     private func dayLabel(for date: Date, calendar: Calendar) -> String {
