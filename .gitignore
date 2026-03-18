@@ -1,7 +1,18 @@
 # Compiled binaries
 src/capture-system-audio
 src/capture-mic-audio
+src/detect-meeting
 spike/capture-audio
+
+# Runtime data
+data/
+
+# Dependencies
+node_modules/
+
+# Local config
+.mcp.json
+.claude/rules/
 
 # Fractal tree (internal development tracking)
 .fractal/

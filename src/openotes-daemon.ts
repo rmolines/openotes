@@ -53,32 +53,6 @@ async function readLines(
   }
 }
 
-// ── stdin helper ─────────────────────────────────────────────────────────────
-
-async function readStdinLine(): Promise<string> {
-  const decoder = new TextDecoder();
-  const reader = (process.stdin as unknown as ReadableStream<Uint8Array>).getReader();
-  let buffer = "";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const newlineIdx = buffer.indexOf("\n");
-      if (newlineIdx !== -1) {
-        const line = buffer.slice(0, newlineIdx).trim();
-        reader.releaseLock();
-        return line;
-      }
-    }
-    return buffer.trim();
-  } catch {
-    reader.releaseLock();
-    return "";
-  }
-}
-
 // ── transcribe-session lifecycle ─────────────────────────────────────────────
 
 function spawnTranscribeSession(): void {
@@ -110,16 +84,20 @@ function stopTranscribeSession(): void {
 // ── notification + user prompt ───────────────────────────────────────────────
 
 async function notifyAndAsk(source: string): Promise<boolean> {
-  const script = `display notification "Reunião detectada (${source}). Gravar?" with title "openotes"`;
-  const notif = Bun.spawn(["osascript", "-e", script], {
-    stdout: "inherit",
-    stderr: "inherit",
+  const script = `display dialog "Reunião detectada (${source}). Gravar?" buttons {"Não", "Gravar"} default button "Gravar" with title "openotes" giving up after 30`;
+  const proc = Bun.spawn(["osascript", "-e", script], {
+    stdout: "pipe",
+    stderr: "pipe",
   });
-  await notif.exited;
 
-  process.stderr.write(`[daemon] Gravar reunião ${source}? [y/N] `);
-  const answer = await readStdinLine();
-  return answer.toLowerCase().startsWith("y");
+  const code = await proc.exited;
+  if (code !== 0) {
+    // User clicked "Não" or dialog timed out
+    return false;
+  }
+
+  const output = await new Response(proc.stdout).text();
+  return output.includes("Gravar");
 }
 
 // ── event handler ─────────────────────────────────────────────────────────────

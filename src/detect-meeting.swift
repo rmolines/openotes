@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import CoreGraphics
 
 // MARK: - Meeting Detector
 
@@ -11,6 +12,11 @@ class MeetingDetector {
         "com.microsoft.teams2": "MicrosoftTeams",
         "com.apple.FaceTime": "FaceTime",
         "com.cisco.webexmeetingsapp": "Webex"
+    ]
+
+    /// Apps where process running ≠ in meeting. Need window title heuristics.
+    private let windowTitleApps: [String: (bundleID: String, keyword: String)] = [
+        "Slack": (bundleID: "com.tinyspeck.slackmacgap", keyword: "Huddle")
     ]
 
     private let browserBundleIDs: [String] = [
@@ -32,8 +38,16 @@ class MeetingDetector {
             }
         }
 
-        // Secondary: check browser tabs for meet.google.com
+        // Secondary: check window titles for apps that need heuristics (e.g. Slack huddle)
         let runningBundleIDs = Set(running.compactMap { $0.bundleIdentifier })
+        for (name, config) in windowTitleApps {
+            guard runningBundleIDs.contains(config.bundleID) else { continue }
+            if checkWindowTitle(bundleID: config.bundleID, keyword: config.keyword) {
+                return (true, name)
+            }
+        }
+
+        // Tertiary: check browser tabs for meet.google.com
         for browserID in browserBundleIDs {
             guard runningBundleIDs.contains(browserID) else { continue }
             if checkBrowserForMeet(bundleID: browserID) {
@@ -42,6 +56,30 @@ class MeetingDetector {
         }
 
         return (false, "")
+    }
+
+    /// Checks if an app has a window whose title contains the given keyword.
+    /// Uses CGWindowList (no Accessibility permission needed).
+    private func checkWindowTitle(bundleID: String, keyword: String) -> Bool {
+        // Find PID for the bundle ID
+        let apps = NSWorkspace.shared.runningApplications.filter { $0.bundleIdentifier == bundleID }
+        guard let app = apps.first else { return false }
+
+        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+
+        for window in windowList {
+            guard let ownerPID = window[kCGWindowOwnerPID as String] as? Int32,
+                  ownerPID == app.processIdentifier,
+                  let windowName = window[kCGWindowName as String] as? String else {
+                continue
+            }
+            if windowName.contains(keyword) {
+                return true
+            }
+        }
+        return false
     }
 
     /// Runs osascript to check if the given browser has a meet.google.com tab open.
@@ -71,13 +109,18 @@ class MeetingDetector {
             """
         }
 
+        return runOsascript(script)
+    }
+
+    /// Executes an osascript and returns true if output contains "FOUND".
+    private func runOsascript(_ script: String) -> Bool {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         proc.arguments = ["-e", script]
 
         let pipe = Pipe()
         proc.standardOutput = pipe
-        proc.standardError = Pipe()  // suppress stderr silently
+        proc.standardError = Pipe()
 
         do {
             try proc.run()
@@ -86,7 +129,6 @@ class MeetingDetector {
             let output = String(data: data, encoding: .utf8) ?? ""
             return output.contains("FOUND")
         } catch {
-            // osascript unavailable or permission denied — treat as not found
             return false
         }
     }
