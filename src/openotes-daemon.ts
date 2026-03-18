@@ -1,0 +1,186 @@
+/**
+ * openotes-daemon.ts — Background daemon for meeting detection and recording
+ *
+ * Orchestrates detect-meeting, macOS notifications, and transcribe-session.
+ *
+ * Usage:
+ *   bun run src/openotes-daemon.ts
+ *
+ * Flow:
+ *   1. Spawns ./src/detect-meeting (polls every 3s)
+ *   2. On MEETING_DETECTED:<source>: sends macOS notification + prompts user
+ *   3. On user confirmation: spawns transcribe-session
+ *   4. On MEETING_ENDED: sends SIGTERM to transcribe-session
+ *   5. If detect-meeting crashes: respawns after 2s
+ *
+ * Logging:
+ *   All logs via process.stderr.write — stdout is reserved for MCP protocol
+ */
+
+type SubProcess = ReturnType<typeof Bun.spawn>;
+
+let transcribeProc: SubProcess | null = null;
+
+// ── readline helper (copied from transcribe-session.ts pattern) ──────────────
+
+async function readLines(
+  stream: ReadableStream<Uint8Array>,
+  onLine: (line: string) => Promise<void>
+): Promise<void> {
+  const decoder = new TextDecoder();
+  const reader = stream.getReader();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+          await onLine(trimmed);
+        }
+      }
+    }
+    if (buffer.trim()) {
+      await onLine(buffer.trim());
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// ── stdin helper ─────────────────────────────────────────────────────────────
+
+async function readStdinLine(): Promise<string> {
+  const decoder = new TextDecoder();
+  const reader = (process.stdin as unknown as ReadableStream<Uint8Array>).getReader();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const newlineIdx = buffer.indexOf("\n");
+      if (newlineIdx !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        reader.releaseLock();
+        return line;
+      }
+    }
+    return buffer.trim();
+  } catch {
+    reader.releaseLock();
+    return "";
+  }
+}
+
+// ── transcribe-session lifecycle ─────────────────────────────────────────────
+
+function spawnTranscribeSession(): void {
+  process.stderr.write("[daemon] spawning transcribe-session\n");
+
+  transcribeProc = Bun.spawn(
+    ["bun", "run", "src/transcribe-session.ts", "--capture", "system"],
+    {
+      stdout: "inherit",
+      stderr: "inherit",
+      cwd: new URL("..", import.meta.url).pathname,
+    }
+  );
+
+  transcribeProc.exited.then((code) => {
+    process.stderr.write(`[daemon] transcribe-session exited (code=${code})\n`);
+    transcribeProc = null;
+  });
+}
+
+function stopTranscribeSession(): void {
+  if (transcribeProc) {
+    process.stderr.write("[daemon] sending SIGTERM to transcribe-session\n");
+    transcribeProc.kill("SIGTERM");
+    transcribeProc = null;
+  }
+}
+
+// ── notification + user prompt ───────────────────────────────────────────────
+
+async function notifyAndAsk(source: string): Promise<boolean> {
+  const script = `display notification "Reunião detectada (${source}). Gravar?" with title "openotes"`;
+  const notif = Bun.spawn(["osascript", "-e", script], {
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  await notif.exited;
+
+  process.stderr.write(`[daemon] Gravar reunião ${source}? [y/N] `);
+  const answer = await readStdinLine();
+  return answer.toLowerCase().startsWith("y");
+}
+
+// ── event handler ─────────────────────────────────────────────────────────────
+
+async function handleEvent(line: string): Promise<void> {
+  if (line.startsWith("MEETING_DETECTED:")) {
+    const source = line.slice("MEETING_DETECTED:".length).trim();
+    process.stderr.write(`[daemon] meeting detected: ${source}\n`);
+
+    if (transcribeProc !== null) {
+      process.stderr.write("[daemon] already recording — skipping\n");
+      return;
+    }
+
+    const confirmed = await notifyAndAsk(source);
+    if (confirmed) {
+      spawnTranscribeSession();
+    } else {
+      process.stderr.write("[daemon] user declined recording\n");
+    }
+  } else if (line === "MEETING_ENDED") {
+    process.stderr.write("[daemon] meeting ended\n");
+    stopTranscribeSession();
+  } else {
+    process.stderr.write(`[daemon] unknown event: ${line}\n`);
+  }
+}
+
+// ── detect-meeting loop (with respawn) ───────────────────────────────────────
+
+async function runDetectMeeting(): Promise<void> {
+  while (true) {
+    process.stderr.write("[daemon] starting detect-meeting\n");
+
+    const proc = Bun.spawn(["./src/detect-meeting"], {
+      stdout: "pipe",
+      stderr: "inherit",
+    });
+
+    await readLines(proc.stdout, handleEvent);
+
+    const code = await proc.exited;
+    process.stderr.write(
+      `[daemon] detect-meeting exited (code=${code}), respawning in 2s\n`
+    );
+    await Bun.sleep(2000);
+  }
+}
+
+// ── SIGTERM handler ───────────────────────────────────────────────────────────
+
+process.on("SIGTERM", () => {
+  process.stderr.write("[daemon] SIGTERM received — shutting down\n");
+  stopTranscribeSession();
+  process.exit(0);
+});
+
+// ── main ──────────────────────────────────────────────────────────────────────
+
+process.stderr.write("[daemon] openotes daemon starting\n");
+runDetectMeeting().catch((err) => {
+  process.stderr.write(`[daemon] fatal: ${err}\n`);
+  process.exit(1);
+});

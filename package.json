@@ -4,7 +4,8 @@
   "scripts": {
     "transcribe": "bun run src/transcribe.ts",
     "session": "bun run src/transcribe-session.ts",
-    "mcp": "bun run src/mcp-server.ts"
+    "mcp": "bun run src/mcp-server.ts",
+    "daemon": "bun run src/openotes-daemon.ts"
   },
   "dependencies": {
     "openserver": "github:rmolines/openserver"
