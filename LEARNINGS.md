@@ -1,5 +1,11 @@
 # Learnings
 
+## daemon-integration
+
+**DispatchSource on a file vs. directory for atomic write detection:** To detect when a file is atomically replaced (write-to-tmp + rename), open the *file itself* with `O_EVTONLY` and watch for `.write` events — not the directory containing it. Watching the directory with `.write` fires when directory contents change (file added/removed), which is correct for detecting new session subdirectories in `data/transcriptions/`. These are two different DispatchSource use cases: directory watch (transcriptions/) for new entries, file watch (.daemon-status.json) for content updates on a known file.
+
+**Synchronous file writes for shutdown-safe status:** In a Bun process that calls `process.exit(0)` from a SIGTERM handler, any pending Promise-based I/O (e.g. `Bun.write().then(renameSync)`) may not complete before exit. For state files that must be accurate at shutdown (recording indicator), use synchronous `writeFileSync + renameSync` from Node's `fs` module. Bun supports `fs.writeFileSync` natively — no extra dependency.
+
 ## data-layer-swift
 
 **SPM `swift run` CWD vs `Bundle.main.bundleURL` for data path resolution:** In an SPM executable, `Bundle.main.bundleURL` resolves to `.build/arm64-apple-macosx/debug/BinaryName` — deep inside the package's build directory. It is NOT the repo root or the `app/` directory. For resolving data paths at runtime, use `FileManager.default.currentDirectoryPath` instead, which gives the working directory at launch time. When running `swift run` from `app/`, CWD is `app/` — so `../data` correctly finds the repo's `data/` directory. This is the right pattern for SPM-managed macOS utilities that reference files relative to the repo root.

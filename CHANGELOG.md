@@ -1,5 +1,12 @@
 # Changelog
 
+## daemon-integration — PR #7 — 2026-03-18
+**Type:** feat
+**Node:** daemon-integration
+**Commit:** `1b20831`
+**What:** Real-time integration between the macOS app and the openotes daemon. `SessionStore` now watches `data/transcriptions/` via `DispatchSource.makeFileSystemObjectSource` with `.write` eventMask — calls `load()` automatically when new session directories appear. `openotes-daemon.ts` writes `data/.daemon-status.json` atomically (writeFileSync + renameSync) with `{ recording, session, started }` fields at startup, recording start, and stop. `AppDelegate` watches `.daemon-status.json` via DispatchSource and switches the NSStatusItem icon to `record.circle.fill` (red) when recording is active.
+**Decisions:** see LEARNINGS.md#daemon-integration
+
 ## data-layer-swift — PR #6 — 2026-03-18
 **Type:** feat
 **Node:** data-layer-swift

@@ -1,5 +1,27 @@
 # Handover
 
+## daemon-integration — 2026-03-18
+
+**What was done:** The macOS app now reacts to the daemon in real time. `SessionStore` watches `data/transcriptions/` via `DispatchSource.makeFileSystemObjectSource` with `.write` eventMask, auto-calling `load()` when new session directories appear — no app restart needed. `openotes-daemon.ts` writes `data/.daemon-status.json` synchronously on recording state changes (startup → false, spawn → true + sessionId, stop → false). `AppDelegate` watches that file via its own DispatchSource and switches the NSStatusItem icon to `record.circle.fill` (red with palette tint) when `recording: true` is detected.
+
+**Key decisions:**
+- Synchronous `writeFileSync + renameSync` chosen over `Bun.write().then()` — eliminates the Promise-before-exit race on SIGTERM where `process.exit(0)` could fire before the atomic rename completed.
+- `DispatchSource.makeFileSystemObjectSource` with `.write` eventMask on a directory fires when directory contents change (files/subdirs added or removed) on macOS — correct for detecting new `session-*/` directories.
+- `dataDirURL` computed property in AppDelegate replicates `SessionStore.dataDir` logic exactly — single source of truth for path resolution is the OPENOTES_DATA_DIR env var pattern established by the data-layer-swift sibling node.
+- AppDelegate creates `.daemon-status.json` with `recording: false` if it doesn't exist at launch — prevents a guard-return on first startup before the daemon runs.
+
+**Pitfalls:**
+- `DispatchSource` on a file (not directory) fires on `.write` when the file is replaced via rename — this is how atomic writes are detected correctly. Watching the directory for the file to change would NOT work; you must open the file itself with O_EVTONLY.
+
+**Next steps:**
+- Human-run AC6 validation: daemon + app, trigger recording, confirm auto-detection end-to-end.
+- Parent predicate (macos-app) will be re-evaluated by the fractal tree.
+
+**Key files:**
+- `app/Sources/Openotes/SessionStore.swift` — DispatchSource watcher on transcriptions/
+- `app/Sources/Openotes/AppDelegate.swift` — DispatchSource watcher on .daemon-status.json + icon logic
+- `src/openotes-daemon.ts` — writeStatusFile() added
+
 ## data-layer-swift — 2026-03-18
 
 **What was done:** The macOS app now has a working data layer. `SessionStore` discovers and loads real transcription sessions from disk at launch — scanning `data/transcriptions/session-*/`, decoding each segment JSON, and publishing them as `@Published var sessions: [Session]`. `ContentView` is wired with `@StateObject SessionStore` and shows session count. Path resolution works with `OPENOTES_DATA_DIR` env var or `../data` relative to CWD, so `swift run` from `app/` finds data without any extra configuration.
