@@ -89,7 +89,7 @@ function spawnTranscribeSession(): void {
     {
       stdout: "inherit",
       stderr: "inherit",
-      cwd: "/Users/rmolines/git/openotes",
+      cwd: new URL("..", import.meta.url).pathname,
     }
   );
 
